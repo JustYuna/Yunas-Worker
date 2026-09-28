@@ -1,0 +1,80 @@
+name: Discord Webhook
+
+on:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Get diff stats
+        id: diff
+        run: |
+          # Get the diff stats as a variable
+          DIFF_STAT=$(git diff --shortstat HEAD~1 HEAD)
+          
+          # Extract numbers using grep -E (more compatible)
+          FILES_CHANGED=$(echo "$DIFF_STAT" | grep -oE '[0-9]+ file' | grep -oE '[0-9]+' || echo "0")
+          INSERTIONS=$(echo "$DIFF_STAT" | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+' || echo "0")
+          DELETIONS=$(echo "$DIFF_STAT" | grep -oE '[0-9]+ deletion' | grep -oE '[0-9]+' || echo "0")
+          
+          # Get list of changed files
+          FILE_LIST=$(git diff --name-only HEAD~1 HEAD | head -10 | sed 's/^/- /' | tr '\n' '|')
+          # Convert | to newline for JSON
+          FILE_LIST_JSON=$(echo "$FILE_LIST" | sed 's/|/\\n/g' | sed 's/"/\\"/g')
+          
+          echo "files_changed=$FILES_CHANGED" >> $GITHUB_OUTPUT
+          echo "insertions=$INSERTIONS" >> $GITHUB_OUTPUT
+          echo "deletions=$DELETIONS" >> $GITHUB_OUTPUT
+          echo "file_list=$FILE_LIST_JSON" >> $GITHUB_OUTPUT
+          
+          # Debug: Print what we found
+          echo "DEBUG: DIFF_STAT = $DIFF_STAT"
+          echo "DEBUG: Files=$FILES_CHANGED, +$INSERTIONS, -$DELETIONS"
+
+      - name: Send to Discord
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          AUTHOR: ${{ github.actor }}
+          COMMIT_URL: ${{ github.event.head_commit.url }}
+          SHA: ${{ github.sha }}
+          FILES_CHANGED: ${{ steps.diff.outputs.files_changed }}
+          INSERTIONS: ${{ steps.diff.outputs.insertions }}
+          DELETIONS: ${{ steps.diff.outputs.deletions }}
+          FILE_LIST: ${{ steps.diff.outputs.file_list }}
+          REPO_NAME: ${{ github.repository }}
+        run: |
+          # Build the JSON payload
+          cat > payload.json << EOF
+          {
+            "embeds": [{
+              "title": "📦 New push",
+              "url": "${COMMIT_URL}",
+              "description": "**${COMMIT_MSG}**",
+              "color": 5793266,
+              "fields": [
+                {
+                  "name": "📊 Diff Stats",
+                  "value": "🟢 +${INSERTIONS} insertions\n🔴 -${DELETIONS} deletions",
+                  "inline": true
+                },
+                {
+                  "name": "📝 Changed Files",
+                  "value": "${FILE_LIST}",
+                  "inline": false
+                }
+              ],
+              "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+            }]
+          }
+          EOF
+          
+          # Send to Discord
+          curl -X POST -H "Content-Type: application/json" -d @payload.json $WEBHOOK_URL

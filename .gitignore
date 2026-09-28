@@ -1,6 +1,5 @@
 # Ignore sensitive files
 .env
-.github
 node_modules/
 package-lock.json
 src/DataStorage/datastore.db
