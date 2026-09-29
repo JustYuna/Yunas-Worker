@@ -1,4 +1,4 @@
-const { diff } = require("node:util");
+const { EmbedBuilder } = require("discord.js")
 
 const Command = {
   data: {
@@ -21,9 +21,9 @@ const Command = {
     ]
   },
   run: async function (interaction, client) {
-    const straights = interaction.options.getInteger("straights");
-    const turns = interaction.options.getInteger("turns");
-    const difficulty = interaction.options.getString("diff");
+    var straights = interaction.options.getInteger("straights");
+    var turns = interaction.options.getInteger("turns");
+    var difficulty = interaction.options.getString("diff");
 
     let turns_needed = (straights) + (turns*3);
     switch (difficulty)
@@ -39,8 +39,11 @@ const Command = {
         break;
     };
 
-    var _str = `Straight pipes: **${straights}** [${straights*2}]\n90deg pipes: **${turns}** [${turns*2}]\nDifficulty: **${difficulty}**\n\nNeeded: **${Math.round(turns_needed)}**`;
-    await interaction.editReply({ content: _str });
+    var Embed = new EmbedBuilder()
+      .setTitle("GameMaker-Pipe-TurnsNeededCalculator")
+      .setDescription(`Straight pipes: **${straights}** [${straights*2}]\n90deg pipes: **${turns}** [${turns*2}]\nDifficulty: **${difficulty}**\n\nNeeded: **${Math.round(turns_needed)}**`);
+
+    await interaction.editReply({ embeds: [Embed] });
   }
 };
 
